@@ -5,6 +5,9 @@ from ulauncher.api.shared.item.ExtensionResultItem import ExtensionResultItem
 from ulauncher.api.shared.action.RenderResultListAction import RenderResultListAction
 from ulauncher.api.shared.action.RunScriptAction import RunScriptAction
 from history import FirefoxHistory
+import os
+import urllib.request
+from urllib.parse import urlparse
 
 class FirefoxHistoryExtension(Extension):
     def __init__(self):
@@ -66,33 +69,35 @@ class KeywordQueryEventListener(EventListener):
         if query == None:
             query = ''
         items = []
+
+        cache_dir = os.path.expanduser('~/.cache/ulauncher-firefox-bookmarks-favicons')
+        os.makedirs(cache_dir, exist_ok=True)
+
         #   Search into Firefox History
         results = extension.fh.search(query)
         for link in results:
-            #   Encode 
-            hostname = link[0]
-            #   Split Domain Levels
-            dm = hostname.split('.')
-            #   Remove WWW
-            if dm[0]=='www':
-                i = 1
-            else:
-                i = 0
-            #   Join remaining domains and capitalize
-            name = ' '.join(dm[i:len(dm)-1]).title()
-            #   TODO: favicon of the website
-            #if extension.fh.aggregate == "true":
-            #    items.append(ExtensionResultItem(icon='images/icon.png',
-                                            #    name=name,
-                                            #    on_enter=OpenUrlAction('https://'+hostname)))
-            #else:
-            title = link[0]
             url = link[1]
-                #if link[1] == None:
-                #    title = hostname
-                #else:
-                #    title = link[1]
-            items.append(ExtensionResultItem(icon='images/icon.png',
+            title = link[0] if link[0] else url
+            icon_path = 'images/icon.png'
+
+            if url:
+                domain = urlparse(url).netloc
+                if domain:
+                    domain_icon_path = os.path.join(cache_dir, f"{domain}.png")
+                    
+                    if not os.path.exists(domain_icon_path):
+                        try:
+                            favicon_url = f"https://www.google.com/s2/favicons?domain={domain}&sz=64"
+                            req = urllib.request.Request(favicon_url, headers={'User-Agent': 'Mozilla/5.0'})
+                            with urllib.request.urlopen(req, timeout=1) as response, open(domain_icon_path, 'wb') as out_file:
+                                out_file.write(response.read())
+                        except Exception:
+                            pass
+                    
+                    if os.path.exists(domain_icon_path):
+                        icon_path = domain_icon_path
+
+            items.append(ExtensionResultItem(icon=icon_path,
                                             name=title,
                                             description=url,
                                             on_enter=RunScriptAction(f"xdg-open {url}")))
