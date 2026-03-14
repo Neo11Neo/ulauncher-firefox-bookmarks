@@ -109,7 +109,7 @@ class KeywordQueryEventListener(EventListener):
         for link in results:
             url = link[1]
             title = link[0] if link[0] else url
-            icon_path = 'images/icon.png'
+            icon_path = 'images/icon.svg'
 
             if url:
                 domain = urlparse(url).netloc
