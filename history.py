@@ -18,7 +18,7 @@ class FirefoxHistory():
         temporary_history_location = tempfile.mktemp()
         shutil.copyfile(history_location, temporary_history_location)
         #   Open Firefox history database
-        self.conn = sqlite3.connect(temporary_history_location)
+        self.conn = sqlite3.connect(temporary_history_location, check_same_thread=False)
         #   External functions
         self.conn.create_function('hostname',1,self.__getHostname)
 
@@ -63,6 +63,23 @@ class FirefoxHistory():
         cursor.execute(query)
         rows = cursor.fetchall()
         return rows
+
+    def get_all_domains(self):
+        query = 'SELECT url FROM moz_bookmarks AS A'
+        query += ' JOIN moz_places AS B ON(A.fk = B.id)'
+        cursor = self.conn.cursor()
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        
+        from urllib.parse import urlparse
+        domains = set()
+        for row in rows:
+            url = row[0]
+            if url:
+                domain = urlparse(url).netloc
+                if domain:
+                    domains.add(domain)
+        return list(domains)
 
     def close(self):
         self.conn.close()

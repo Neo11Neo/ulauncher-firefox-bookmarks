@@ -15,6 +15,7 @@ class FirefoxHistoryExtension(Extension):
         #   Firefox History Getter
         #   Delayed initialisation, need to get path from preferences
         self.fh = None
+        self.downloading_favicons = set()
         #   Ulauncher Events
         self.subscribe(KeywordQueryEvent,KeywordQueryEventListener())
         self.subscribe(SystemExitEvent,SystemExitEventListener())
@@ -25,6 +26,36 @@ class FirefoxHistoryExtension(Extension):
         #   Initialise Firefox History Getter with path from preferences
         if self.fh is None:
             self.fh = FirefoxHistory(firefox_path)
+            self.cache_all_favicons()
+
+    def cache_all_favicons(self):
+        import threading
+        def worker():
+            cache_dir = os.path.expanduser('~/.cache/ulauncher-firefox-bookmarks-favicons')
+            os.makedirs(cache_dir, exist_ok=True)
+            domains = self.fh.get_all_domains()
+            for domain in domains:
+                domain_icon_path = os.path.join(cache_dir, f"{domain}.png")
+                if not os.path.exists(domain_icon_path):
+                    self.download_favicon_async(domain, domain_icon_path)
+        threading.Thread(target=worker, daemon=True).start()
+
+    def download_favicon_async(self, domain, domain_icon_path):
+        if domain in self.downloading_favicons:
+            return
+        self.downloading_favicons.add(domain)
+        import threading
+        def worker():
+            try:
+                favicon_url = f"https://www.google.com/s2/favicons?domain={domain}&sz=64"
+                req = urllib.request.Request(favicon_url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=2) as response, open(domain_icon_path, 'wb') as out_file:
+                    out_file.write(response.read())
+            except Exception:
+                pass
+            finally:
+                self.downloading_favicons.discard(domain)
+        threading.Thread(target=worker, daemon=True).start()
 
 class PreferencesEventListener(EventListener):
     def on_event(self,event,extension):
@@ -85,17 +116,10 @@ class KeywordQueryEventListener(EventListener):
                 if domain:
                     domain_icon_path = os.path.join(cache_dir, f"{domain}.png")
                     
-                    if not os.path.exists(domain_icon_path):
-                        try:
-                            favicon_url = f"https://www.google.com/s2/favicons?domain={domain}&sz=64"
-                            req = urllib.request.Request(favicon_url, headers={'User-Agent': 'Mozilla/5.0'})
-                            with urllib.request.urlopen(req, timeout=1) as response, open(domain_icon_path, 'wb') as out_file:
-                                out_file.write(response.read())
-                        except Exception:
-                            pass
-                    
                     if os.path.exists(domain_icon_path):
                         icon_path = domain_icon_path
+                    else:
+                        extension.download_favicon_async(domain, domain_icon_path)
 
             items.append(ExtensionResultItem(icon=icon_path,
                                             name=title,
