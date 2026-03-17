@@ -109,3 +109,6 @@ venv.bak/
 
 #
 /tests/test_favicons_output
+/tests/test_favicons_best_output
+/tests/test_favicons_hires_output
+
